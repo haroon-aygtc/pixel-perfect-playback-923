@@ -40,7 +40,7 @@ header{background:#0a0908ea}.brand{display:flex;align-items:center;gap:8px}
 #cmd{display:flex;justify-content:space-between;font:13px var(--m);color:var(--tx)}#cmdc{color:var(--c)}
 .two{display:grid;gap:12px;grid-template-columns:1fr}@media(min-width:900px){.two{grid-template-columns:1.5fr 1fr}}
 #map{display:block;width:100%}.br{display:grid;grid-template-columns:78px 1fr 62px;gap:10px;align-items:center;font:11px var(--m);color:var(--mut);margin:9px 0}.br u{height:5px;background:#ffffff14;display:block}.br i{display:block;height:100%;width:0;transition:width .3s}.br em{font-style:normal;text-align:right;color:var(--tx)}
-</style></head><body>
+</style><link rel="stylesheet" href="/studio-suite.css"></head><body>
 <div id="launch"><div class="lc"><h1>Choose a target</h1>
 <p>Everything runs in your browser. Files are read locally and never uploaded. The agents extract real file hashes, URLs, endpoints, libraries and storage keys, and every step is logged as an event.</p>
 <label class="auth"><input type="checkbox" id="ok"><span>I own this target or have written permission to examine it. This is recorded in the run log.</span></label>
@@ -577,4 +577,4 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const t=now/
 new IntersectionObserver(es=>es.forEach(e=>bc._v=e.isIntersecting)).observe(bc);
 rebuild();reaRender();info();requestAnimationFrame(frame);
 })();
-</script></body></html>
+</script><script src="/studio-suite.js"></script></body></html>
