@@ -10,33 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiReaAgentRouteImport } from './routes/api/rea-agent'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiReaAgentRoute = ApiReaAgentRouteImport.update({
+  id: '/api/rea-agent',
+  path: '/api/rea-agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/rea-agent': typeof ApiReaAgentRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/rea-agent': typeof ApiReaAgentRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/rea-agent': typeof ApiReaAgentRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/rea-agent'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/rea-agent'
+  id: '__root__' | '/' | '/api/rea-agent'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiReaAgentRoute: typeof ApiReaAgentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/rea-agent': {
+      id: '/api/rea-agent'
+      path: '/api/rea-agent'
+      fullPath: '/api/rea-agent'
+      preLoaderRoute: typeof ApiReaAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiReaAgentRoute: ApiReaAgentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
