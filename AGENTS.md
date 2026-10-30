@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- The studio lives in public/studio.html (embedded by src/routes/index.tsx); extensions go in public/studio-suite.js/.css, which read the studio globals (S, running) instead of editing the original script. Why: keeps the uploaded app intact.
