@@ -189,7 +189,7 @@ function derive(){
  const ep=new Map();
  fnd.filter(f=>f.kind==='endpoint').forEach(f=>ep.set((f.method||'GET')+' '+f.value,{method:f.method||'GET',path:f.value,file:f.file,id:f.id}));
  const endpoints=[...ep.values()];
- const route=fnd.filter(f=>f.kind==='route').map(f=>({route:f.value,file:f.file,how:'declared route'}));
+ const route=fnd.filter(f=>f.kind==='route'&&!/^#([0-9a-f]{3,8}|)$/i.test(f.value)).map(f=>({route:f.value,file:f.file,how:'declared route'}));
  const screens=[];const sk=new Set();
  [...D.screens,...route].forEach(s=>{if(!sk.has(s.route)){sk.add(s.route);screens.push(s)}});
  /* fall back: one screen if UI exists but no routes were found */
