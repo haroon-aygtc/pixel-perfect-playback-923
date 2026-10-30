@@ -52,7 +52,7 @@ const RISK=[['eval() usage',/\beval\s*\(/g,'high','Replace eval with JSON.parse 
 const CDN=/cdnjs|unpkg|jsdelivr|googleapis\.com|gstatic|cdn\.|fonts\.|bootstrapcdn|w3\.org|schemas\.|gpteng/i;
 
 /* ---------- state ---------- */
-let D=null,scanning=false,lastS=null,baseDone=false,tab='overview',radarPts=[],derived=null,mem=null,protoState={i:0,desk:false};
+let D=null,scanning=false,lastS=null,baseDone=false,tab='agent',radarPts=[],derived=null,mem=null,protoState={i:0,desk:false};
 const newD=()=>({k:{},files:0,loc:0,langs:{},roles:{},libs:new Set(),secrets:[],risks:[],env:[],models:[],comps:[],inputs:[],btns:[],evs:{},mem:[],srv:[],perms:[],entry:[],screens:[],links:[],mods:{},hosts:{},todos:0,tests:0,paths:[],fsig:[]});
 
 function put(cat,key,rec,cap=80){D.k[cat]=D.k[cat]||new Set();if(D.k[cat].has(key)||D.k[cat].size>=cap)return false;D.k[cat].add(key);D[cat].push(rec);radarPts.push({c:cat,v:key});return true}
@@ -241,7 +241,7 @@ function build(){
  <div class="su-scan"><canvas id="radar" width="260" height="260" aria-label="Deep scan radar: blips appear as items are discovered"></canvas><div class="sc-rows" id="scRows"></div></div>
  <div class="su-tabs" role="tablist" id="suTabs"></div><div class="su-pane" id="suPane"></div>`;
  const anchor=q('.two')||q('#dg');anchor.insertAdjacentElement('afterend',box);
- const TABS=[['overview','Overview'],['structure','Structure'],['arch','Architecture'],['flow','Data flow'],['user','User flow'],['prd','PRD'],['proto','Prototype'],['memory','Memory map'],['threats','Threats'],['export','Export']];
+ const TABS=[['agent','REA Agent'],['overview','Overview'],['structure','Structure'],['arch','Architecture'],['flow','Data flow'],['user','User flow'],['prd','PRD'],['proto','Prototype'],['memory','Memory map'],['threats','Threats'],['export','Export']];
  q('#suTabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" data-t="${k}" aria-selected="${k===tab}">${l}</button>`).join('');
  q('#suTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;qa('#suTabs button').forEach(x=>x.setAttribute('aria-selected',x===b));renderPane()};
  const go=document.createElement('button');go.id='suiteGo';go.className='hide';go.textContent='Suite ↓';go.onclick=()=>box.scrollIntoView({behavior:'smooth'});(q('#again')||q('header')).insertAdjacentElement('beforebegin',go);
@@ -270,7 +270,7 @@ function radarLoop(){const c=q('#radar');if(!c)return;const x=c.getContext('2d')
 
 function emptyPane(){const p=q('#suPane');if(p)p.innerHTML='<div class="empty">The suite fills in as soon as you choose a target and the Deep Scanner has read it.<br>Try “Scan this page’s own code (sample)” for an instant demo.</div>'}
 function renderAll(){renderPane()}
-function renderPane(){const p=q('#suPane');if(!p)return;if(!D||!derived){if(scanning)p.innerHTML='<div class="empty">Deep Scanner is still reading files. This tab will fill in when it finishes.</div>';else emptyPane();return}
+function renderPane(){const p=q('#suPane');if(!p)return;if(tab==='agent'){p.innerHTML=vAgent();wireAgent();return}if(!D||!derived){if(scanning)p.innerHTML='<div class="empty">Deep Scanner is still reading files. This tab will fill in when it finishes.</div>';else emptyPane();return}
  try{p.innerHTML=({overview:vOverview,structure:vStructure,arch:vArch,flow:vFlow,user:vUser,prd:vPrd,proto:vProto,memory:vMemory,threats:vThreats,export:vExport}[tab]||vOverview)()}catch(e){console.error(e);p.innerHTML='<div class="empty">This view hit an error: '+X(e.message)+'</div>'}
  if(tab==='memory')wireMem()}
 
@@ -450,6 +450,7 @@ function vExport(){return `<div class="hint">Everything is generated locally fro
 function dl(name,text,type='text/plain'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 function flashBtn(b,t){if(!b)return;const o=b.innerHTML;b.innerHTML=t;setTimeout(()=>b.innerHTML=o,1300)}
 async function paneClick(e){
+ const pc=e.target.closest('[data-p]');if(pc){return agentAsk(pc.dataset.p)}
  const go=e.target.closest('[data-go]');if(go){protoState.i=+go.dataset.go;return renderPane()}
  const pb=e.target.closest('.pt-btn');if(pb){const href=pb.dataset.b,sc=derived.screens.slice(0,12),i=sc.findIndex(s=>s.route===href);const t=q('#ptToast');if(i>=0){protoState.i=i;return renderPane()}if(t){t.textContent=pb.dataset.api?'→ '+pb.dataset.api:'"'+pb.dataset.l+'": no navigation or API call observed';t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1800)}return}
  const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a;
@@ -461,13 +462,99 @@ async function paneClick(e){
  if(a.startsWith('cp-')){await navigator.clipboard.writeText(mermaid(a.slice(3))).catch(()=>{});return flashBtn(b,'<b>Copied</b>')}
  if(a==='zip'){const f=files();if(window.JSZip){const z=new JSZip();Object.entries(f).forEach(([k,v])=>z.file(k,v));const blob=await z.generateAsync({type:'blob'});const l=document.createElement('a');l.href=URL.createObjectURL(blob);l.download='rea-report-'+S.name.replace(/\W+/g,'-').slice(0,30)+'.zip';document.body.appendChild(l);l.click();setTimeout(()=>{URL.revokeObjectURL(l.href);l.remove()},500);flashBtn(b,'<b>Downloaded</b>')}else{Object.entries(f).forEach(([k,v])=>dl(k,v));}}}
 
+
+/* ================= REA AGENT: model on the server, tools run here on your files ================= */
+const AG={msgs:[],ui:[],busy:false,runId:null,ledger:[],draft:'',tgt:null,steps:0};
+const TOOLNAMES={overview:'Overview',list_files:'List files',read_file:'Read file',search_code:'Search code',trace_symbol:'Trace symbol',get_findings:'Get findings',inspect_binary:'Inspect bytes',hex_view:'Hex view',record_finding:'Record evidence'};
+const textCache=new Map();
+const isText=p=>!SKIP.test(p);
+async function textOf(path){if(textCache.has(path))return textCache.get(path);const f=S.vf[path];if(!f)throw new Error('no such file: '+path);let t='';try{t=toText(await f.read(1572864))}catch(e){}t=typeof t==='string'?t:'';textCache.set(path,t);return t}
+function resolvePath(p){if(S.vf[p])return p;const c=Object.keys(S.vf);return c.find(x=>clean(x)===p)||c.find(x=>clean(x).endsWith('/'+p))||c.find(x=>clean(x).toLowerCase().endsWith(String(p).toLowerCase()))||p}
+async function bytesOf(path,max=1048576){const f=S.vf[resolvePath(path)];if(!f)throw new Error('no such file: '+path);return new Uint8Array(await f.read(max))}
+const hexRow=(u,o)=>{const sl=[...u.slice(o,o+16)];return o.toString(16).padStart(8,'0')+'  '+sl.map(b=>b.toString(16).padStart(2,'0')).join(' ').padEnd(47)+'  '+sl.map(b=>b>31&&b<127?String.fromCharCode(b):'.').join('')};
+const MAGIC=[['4d5a','PE / Windows executable or DLL'],['7f454c46','ELF executable'],['cafebabe','Java class or Mach-O fat binary'],['feedface','Mach-O 32-bit'],['feedfacf','Mach-O 64-bit'],['cffaedfe','Mach-O 64-bit'],['504b0304','ZIP container (zip, apk, jar, docx, xpi)'],['25504446','PDF'],['89504e47','PNG image'],['ffd8ff','JPEG image'],['47494638','GIF image'],['1f8b','gzip'],['6465780a','Android DEX'],['00617364','Android resources'],['0061736d','WebAssembly module'],['53514c69','SQLite database'],['7b','JSON-like text'],['3c','markup text']];
+async function runTool(name,a){a=a||{};
+ if(name==='overview'){const d=derived;return d?{target:S.name,type:d.type,files:D.files,lines:D.loc,languages:Object.entries(D.langs).sort((x,y)=>y[1]-x[1]).slice(0,6),tech:d.tech.map(t=>t.n),entry_points:D.entry.slice(0,8).map(e=>e.path),screens:d.screens.slice(0,10).map(s=>s.route),endpoints_consumed:d.endpoints.length,routes_exposed:D.srv.length,models:D.models.slice(0,8).map(m=>m.name),memory_points:D.mem.length,env_vars:D.env.length,secrets:D.secrets.length,risks:D.risks.length,hosts:d.hosts.slice(0,8).map(h=>h[0])}:{target:S.name,files:S.files.length,note:'deep scan not finished; findings so far: '+S.findings.length}}
+ if(name==='list_files'){let re=null;if(a.filter){try{re=new RegExp(a.filter,'i')}catch(e){re=new RegExp(String(a.filter).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i')}}const out=S.files.filter(f=>!re||re.test(clean(f.path))).slice(0,Math.min(a.limit||80,200)).map(f=>({path:clean(f.path),bytes:f.size,role:layerOf(clean(f.path)),sha:f.hash}));return{total_matching:S.files.filter(f=>!re||re.test(clean(f.path))).length,files:out}}
+ if(name==='read_file'){const p=resolvePath(a.path),t=await textOf(p);if(!t)return{error:'binary or empty file; use inspect_binary or hex_view',path:p};const ls=t.split('\n');const s=Math.max(1,a.start_line||1),e=Math.min(ls.length,a.end_line||s+199,s+249);return{path:clean(p),total_lines:ls.length,range:[s,e],text:ls.slice(s-1,e).map((l,i)=>(s+i)+'| '+(l.length>400?l.slice(0,400)+'…':l)).join('\n')}}
+ if(name==='search_code'||name==='trace_symbol'){const sym=name==='trace_symbol';let re;const pat=sym?'\\b'+String(a.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b':a.pattern;try{re=new RegExp(pat,'i')}catch(e){re=new RegExp(String(pat).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i')}
+  const lim=Math.min(a.max_results||(sym?60:40),100),hits=[];let scanned=0;const defRe=sym?new RegExp('(?:function|class|const|let|var|def|interface|type|enum|fun|func|struct)\\s+'+String(a.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b|\\b'+String(a.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[:=]\\s*(?:async\\s*)?(?:function|\\()'):null;
+  for(const f of S.files){if(hits.length>=lim)break;const p=f.path;if(!isText(p)||(a.path_filter&&!clean(p).includes(a.path_filter)))continue;if(++scanned>700)break;let t='';try{t=await textOf(p)}catch(e){}if(!t)continue;const ls=t.split('\n');for(let i=0;i<ls.length&&hits.length<lim;i++)if(re.test(ls[i]))hits.push({at:clean(p)+':'+(i+1),line:ls[i].trim().slice(0,220),...(sym?{kind:defRe.test(ls[i])?'definition':'reference'}:{})})}
+  return{files_searched:scanned,matches:hits.length,results:hits}}
+ if(name==='get_findings'){const k=String(a.kind||'').toLowerCase(),lim=Math.min(a.limit||50,150);const F=S.findings||[];const bs=x=>F.filter(f=>f.kind===x).slice(0,lim).map(f=>({value:f.value,at:clean(f.file)+':'+f.line,method:f.method||undefined,ver:f.ver||undefined}));
+  const m={endpoint:()=>bs('endpoint'),url:()=>bs('url'),storage:()=>bs('storage'),route:()=>bs('route'),ui:()=>bs('ui'),dep:()=>bs('dep'),import:()=>bs('import')};
+  if(m[k])return{kind:k,items:m[k]()};if(!D)return{error:'deep scan not available yet'};
+  const dm={model:()=>D.models.map(x=>({name:x.name,kind:x.kind,fields:x.fields,at:x.file+':'+x.line})),screen:()=>(derived?derived.screens:D.screens).map(s=>({route:s.route,title:s.title,file:s.file,how:s.how})),memory:()=>D.mem.map(x=>({type:x.type,name:x.name,op:x.op,at:x.file+':'+x.line})),secret:()=>D.secrets.map(x=>({name:x.name,severity:x.sev,value_masked:x.val,at:x.file+':'+x.line})),risk:()=>D.risks.map(x=>({name:x.name,severity:x.sev,at:x.file+':'+x.line,snippet:x.snip})),env:()=>D.env.map(x=>({name:x.name,at:x.file+':'+x.line})),component:()=>D.comps.map(x=>({name:x.name,at:x.file+':'+x.line})),permission:()=>D.perms.map(x=>({name:x.full,kind:x.kind,at:x.file+':'+x.line})),server_route:()=>D.srv.map(x=>({method:x.method,path:x.path,at:x.file+':'+(x.line||''),how:x.how})),input:()=>D.inputs.map(x=>({type:x.type,label:x.label,file:x.file})),button:()=>D.btns.map(x=>({label:x.label,href:x.href,at:x.file+':'+x.line}))};
+  return dm[k]?{kind:k,items:dm[k]().slice(0,lim)}:{error:'unknown kind',allowed:Object.keys(m).concat(Object.keys(dm))}}
+ if(name==='inspect_binary'||name==='hex_view'){const p=resolvePath(a.path),u=await bytesOf(p,1048576);
+  if(name==='hex_view'){const off=Math.max(0,a.offset|0),len=Math.min(a.length||256,512),rows=[];for(let o=off;o<Math.min(u.length,off+len);o+=16)rows.push(hexRow(u,o));return{path:clean(p),offset:off,bytes_read_cap:u.length,dump:rows.join('\n')}}
+  const cnt=new Array(256).fill(0);u.forEach(b=>cnt[b]++);let H=0;cnt.forEach(c=>{if(c){const q2=c/u.length;H-=q2*Math.log2(q2)}});const hx=[...u.slice(0,4)].map(b=>b.toString(16).padStart(2,'0')).join('');const mg=MAGIC.find(m=>hx.startsWith(m[0]));
+  let strs=[],cur='';for(const b of u){if(b>31&&b<127)cur+=String.fromCharCode(b);else{if(cur.length>=6)strs.push(cur);cur=''}if(strs.length>=60)break}const rec=S.files.find(f=>f.path===p);
+  return{path:clean(p),size_total:rec?rec.size:u.length,sample_bytes:u.length,sha256_prefix:rec&&rec.hash,type:mg?mg[1]:'unknown',entropy_bits_per_byte:+H.toFixed(2),entropy_hint:H>7.5?'very high: compressed, encrypted or packed':H>6?'high: compiled code or compressed data':'low-moderate: text or structured data',strings:strs.slice(0,60).map(x=>x.slice(0,120)),header_hex:hexRow(u,0)+'\n'+hexRow(u,16)+'\n'+hexRow(u,32)+'\n'+hexRow(u,48),note:'Byte-level view only. No disassembler or decompiler is available in this browser.'}}
+ if(name==='record_finding'){const p=resolvePath(a.path),t=await textOf(p).catch(()=>'' ),norm=x=>String(x).replace(/\s+/g,' ').trim(),q2=norm(a.quote||'');let line=0,ok=false;if(t&&q2){const flat=t.split('\n');for(let i=0;i<flat.length;i++)if(norm(flat[i]).includes(q2)){ok=true;line=i+1;break}if(!ok&&norm(t).includes(q2)){ok=true;const idx=t.replace(/\s+/g,' ').indexOf(q2);line=0;}}
+  const rec={claim:String(a.claim||'').slice(0,300),path:clean(p),line,quote:q2.slice(0,200),conf:a.confidence==='inferred'?'inferred':'observed',verified:ok};AG.ledger.push(rec);return{recorded:true,verified:ok,line:line||undefined,note:ok?'Quote found in file.':'Quote NOT found verbatim in that file. Re-read the file and quote exactly, or downgrade the claim.'}}
+ return{error:'unknown tool '+name}}
+const clip=o=>{let s=JSON.stringify(o);if(s.length>14000)return{truncated:true,preview:s.slice(0,14000)};return o};
+
+function agentSummary(){if(!S||!S.name)return'none loaded';const d=derived;return JSON.stringify({target:S.name,files:S.files.length,findings:S.findings.length,...(d?{type:d.type,tech:d.tech.slice(0,12).map(t=>t.n),lines:D.loc,screens:d.screens.length,models:D.models.length}:{deep_scan:'running or not started'}),sample_paths:S.files.slice(0,25).map(f=>clean(f.path))})}
+function agentReset(){AG.msgs=[];AG.ui=[];AG.busy=false;AG.runId=null;AG.ledger=[];AG.steps=0;textCache.clear();AG.tgt=S}
+async function agentAsk(text){
+ if(AG.busy||!text.trim())return;if(!S||!S.name||!S.files.length){AG.ui.push({k:'err',t:'Choose a target first. The agent can only inspect what is loaded.'});return agentRefresh()}
+ AG.busy=true;AG.ui.push({k:'user',t:text});AG.msgs.push({role:'user',content:text});agentRefresh();let steps=0;
+ try{
+  while(steps++<14){
+   AG.ui.push({k:'wait'});agentRefresh();
+   let j;try{const r=await fetch('/api/rea-agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:AG.msgs,summary:agentSummary(),runId:AG.runId})});j=await r.json()}catch(e){j={error:'Could not reach the agent service. Check your connection.'}}
+   AG.ui=AG.ui.filter(x=>x.k!=='wait');
+   if(j.error){AG.ui.push({k:'err',t:j.error});break}
+   AG.runId=j.runId||AG.runId;AG.msgs.push(...j.messages);
+   if(j.thinking)AG.ui.push({k:'think',t:j.thinking});
+   if(j.text)AG.ui.push({k:'ans',t:j.text});
+   if(!j.toolCalls.length)break;
+   const results=[];
+   for(const c of j.toolCalls){const row={k:'tool',name:c.name,args:c.input,out:null,status:'run'};AG.ui.push(row);agentRefresh();const t0=performance.now();let out;try{out=clip(await runTool(c.name,c.input))}catch(e){out={error:String(e.message||e)}}row.out=out;row.ms=Math.round(performance.now()-t0);row.status=out&&out.error?'bad':'ok';agentRefresh();results.push({type:'tool-result',toolCallId:c.id,toolName:c.name,output:{type:'json',value:out}})}
+   AG.msgs.push({role:'tool',content:results});
+   if(steps>=14){AG.ui.push({k:'err',t:'Step limit reached for one question. Ask a follow-up to continue the investigation.'})}
+  }
+ }finally{AG.busy=false;AG.ui=AG.ui.filter(x=>x.k!=='wait');agentRefresh()}}
+
+function mdLite(t){const parts=String(t).split(/```/);return parts.map((p,i)=>{if(i%2)return'<pre class="code">'+X(p.replace(/^\w*\n/,''))+'</pre>';
+ let o='',ul=false;const inl=s=>X(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\[(observed|inferred|unknown)\]/g,(m,k)=>`<span class="tg ${k[0]}">${k}</span>`).replace(/\b([\w./-]+\.\w{1,6}:\d+)\b/g,'<code class="ev">$1</code>');
+ p.split('\n').forEach(l=>{const li=/^\s*[-*] /.test(l)||/^\s*\d+\. /.test(l);if(!li&&ul){o+='</ul>';ul=false}if(/^#{1,3} /.test(l))o+='<h3>'+inl(l.replace(/^#+ /,''))+'</h3>';else if(li){if(!ul){o+='<ul>';ul=true}o+='<li>'+inl(l.replace(/^\s*([-*]|\d+\.) /,''))+'</li>'}else if(l.trim())o+='<p>'+inl(l)+'</p>'});return o+(ul?'</ul>':'')}).join('')}
+const argTxt=a=>{try{const s=Object.entries(a||{}).map(([k,v])=>k+'='+(typeof v==='string'?JSON.stringify(short(v,60)):v)).join(' ');return short(s,110)}catch(e){return''}};
+function logHtml(){if(!AG.ui.length)return`<div class="ag-hero"><b>Ask about this target.</b><span>The model runs on the server. Its tools run in your browser against your files, so only the snippets it asks for are sent.</span></div>`;
+ return AG.ui.map(u=>{
+  if(u.k==='user')return`<div class="ag-m u">${X(u.t)}</div>`;
+  if(u.k==='wait')return`<div class="ag-m w"><i></i><i></i><i></i> thinking</div>`;
+  if(u.k==='think')return`<details class="ag-th"><summary>Reasoning summary</summary>${mdLite(u.t)}</details>`;
+  if(u.k==='err')return`<div class="ag-m e">${X(u.t)}</div>`;
+  if(u.k==='tool')return`<details class="ag-t ${u.status}"><summary><b>${X(TOOLNAMES[u.name]||u.name)}</b> <em>${X(argTxt(u.args))}</em> <span>${u.status==='run'?'running…':u.status==='bad'?'error':u.ms+' ms'}</span></summary><pre class="code">${X(u.out?JSON.stringify(u.out,null,1).slice(0,3500):'…')}</pre></details>`;
+  return`<div class="ag-m a">${mdLite(u.t)}</div>`}).join('')}
+function ledgerHtml(){if(!AG.ledger.length)return'<div class="hint">Findings the agent proves with a quoted line appear here, each checked against the file.</div>';
+ return AG.ledger.map(l=>`<div class="led ${l.verified?'ok':'no'}"><span class="tg ${l.conf[0]}">${l.conf}</span> <b>${l.verified?'verified':'unverified'}</b> ${X(l.claim)}<small>${X(l.path)}${l.line?':'+l.line:''}</small><code>${X(short(l.quote,160))}</code></div>`).join('')}
+function agentRefresh(){if(tab!=='agent')return;const lg=q('#agLog');if(!lg)return;const stick=lg.scrollHeight-lg.scrollTop-lg.clientHeight<80;lg.innerHTML=logHtml();if(stick)lg.scrollTop=lg.scrollHeight;const L=q('#agLedger');if(L)L.innerHTML=ledgerHtml();const b=q('#agSend');if(b){b.disabled=AG.busy;b.textContent=AG.busy?'Working…':'Ask REA'}}
+const PROMPTS=['Explain how this target works, end to end.','Find every network call and what data it sends.','Where does it keep user data, and for how long?','Review security: what would you fix first?','Write a PRD for it and cite the files.','Pick the most important feature and rebuild it in a clean room.'];
+function vAgent(){return`<div class="ag"><div class="ag-bar"><span class="chip"><i></i>REA agent · Lovable AI</span><span class="chip">${Object.keys(TOOLNAMES).length} tools on your files</span><span class="chip">${S&&S.name?X(short(S.name,28)):'no target'}</span></div>
+ <div class="ag-log" id="agLog">${logHtml()}</div>
+ <div class="chips ag-p">${PROMPTS.map(p=>`<button class="chip" data-p="${X(p)}" style="cursor:pointer">${X(short(p,44))}</button>`).join('')}</div>
+ <form class="ag-in" id="agForm"><textarea id="agText" rows="2" placeholder="Ask REA about the target, e.g. why does 200 + 10% give 220?">${X(AG.draft)}</textarea><button id="agSend" class="pri" ${AG.busy?'disabled':''}>${AG.busy?'Working…':'Ask REA'}</button></form>
+ <div class="su-h">Evidence ledger <span>quotes checked against the files</span></div><div id="agLedger">${ledgerHtml()}</div></div>`}
+function wireAgent(){const f=q('#agForm'),t=q('#agText');if(!f)return;const go=()=>{const v=t.value;t.value='';AG.draft='';agentAsk(v)};f.onsubmit=e=>{e.preventDefault();go()};t.oninput=()=>AG.draft=t.value;t.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}};const lg=q('#agLog');if(lg)lg.scrollTop=lg.scrollHeight}
+
+/* website target: server fetches the public page and its scripts/styles, then the normal scan runs on them */
+let pendingName=null;
+function addUrlLaunch(){const row=q('#launch .row');if(!row||q('#urlGo'))return;const w=document.createElement('div');w.style.cssText='display:grid;gap:8px;grid-template-columns:1fr auto';w.innerHTML='<input id="urlIn" class="pick" disabled placeholder="https://example.com" inputmode="url" style="font:12px var(--m);background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:9px 11px;min-width:0"><button class="pick" id="urlGo" disabled>Inspect site</button>';row.appendChild(w);
+ const go=async()=>{const u=q('#urlIn').value.trim();if(!u)return;const b=q('#urlGo');b.textContent='Fetching…';b.disabled=true;try{const r=await fetch('/api/rea-fetch',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:/^https?:/i.test(u)?u:'https://'+u})});const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||'failed');const fl=j.files.map(f=>new File([f.content],f.path,{type:'text/plain'}));pendingName=new URL(j.url).host;begin(fl)}catch(e){b.textContent=String(e.message||'Failed').slice(0,40)}finally{setTimeout(()=>{b.textContent='Inspect site';b.disabled=!q('#ok').checked},2000)}};
+ q('#urlGo').onclick=go;q('#urlIn').onkeydown=e=>{if(e.key==='Enter')go()};
+ const _run=run;run=(vf,name)=>{const n=pendingName||name;pendingName=null;return _run(vf,n)}}
+
 /* ---------- lifecycle watcher ---------- */
 function tick(){try{
  if(typeof S==='undefined')return;
- if(S!==lastS){lastS=S;baseDone=false;if(!scanning){D=null;derived=null;radarPts=[];if(q('#suite')){liveRows();progress(0);const d=q('#suDot');if(d)d.className='idle';q('#suState').textContent='waiting for a target';const g=q('#suiteGo');if(g)g.classList.add('hide');emptyPane()}}}
+ if(S!==lastS){lastS=S;baseDone=false;if(AG.tgt!==S)agentReset();if(tab==='agent'&&q('#suite'))renderPane();if(!scanning){D=null;derived=null;radarPts=[];if(q('#suite')){liveRows();progress(0);const d=q('#suDot');if(d)d.className='idle';q('#suState').textContent='waiting for a target';const g=q('#suiteGo');if(g)g.classList.add('hide');emptyPane()}}}
  if(!scanning&&!D&&S.name&&S.total>0&&S.files.length>=S.total&&q('#suite'))deepScan();
  if(!running&&D&&!scanning&&S.name&&!baseDone&&/^complete/.test(q('#runid').textContent)){baseDone=true;derive();renderAll();celebrate()}
 }catch(e){console.warn('suite tick',e)}}
-function init(){build();setInterval(tick,350)}
+function init(){build();addUrlLaunch();setInterval(tick,350)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
