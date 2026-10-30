@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiReaAgentRouteImport } from './routes/api/rea-agent'
+import { Route as ApiReaFetchRouteImport } from './routes/api/rea-fetch'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ApiReaAgentRoute = ApiReaAgentRouteImport.update({
   path: '/api/rea-agent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiReaFetchRoute = ApiReaFetchRouteImport.update({
+  id: '/api/rea-fetch',
+  path: '/api/rea-fetch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/rea-agent': typeof ApiReaAgentRoute
+  '/api/rea-fetch': typeof ApiReaFetchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/rea-agent': typeof ApiReaAgentRoute
+  '/api/rea-fetch': typeof ApiReaFetchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/rea-agent': typeof ApiReaAgentRoute
+  '/api/rea-fetch': typeof ApiReaFetchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/rea-agent'
+  fullPaths: '/' | '/api/rea-agent' | '/api/rea-fetch'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/rea-agent'
-  id: '__root__' | '/' | '/api/rea-agent'
+  to: '/' | '/api/rea-agent' | '/api/rea-fetch'
+  id: '__root__' | '/' | '/api/rea-agent' | '/api/rea-fetch'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiReaAgentRoute: typeof ApiReaAgentRoute
+  ApiReaFetchRoute: typeof ApiReaFetchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiReaAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/rea-fetch': {
+      id: '/api/rea-fetch'
+      path: '/api/rea-fetch'
+      fullPath: '/api/rea-fetch'
+      preLoaderRoute: typeof ApiReaFetchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiReaAgentRoute: ApiReaAgentRoute,
+  ApiReaFetchRoute: ApiReaFetchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
