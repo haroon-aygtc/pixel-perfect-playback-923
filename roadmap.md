@@ -1,3 +1,3 @@
-- [ ] Add local practice challenges tied to the loaded code target.
-- [ ] Run isolated REA sessions with cancellation, evidence grading, and saved history.
-- [ ] Verify practice on uploaded code and run regression tests.
+- [x] Add local practice challenges tied to the loaded code target.
+- [x] Run isolated REA sessions with cancellation, evidence grading, and saved history.
+- [x] Verify practice on uploaded code and run regression tests.
