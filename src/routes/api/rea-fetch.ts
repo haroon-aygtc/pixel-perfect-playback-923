@@ -35,12 +35,12 @@ export const Route = createFileRoute("/api/rea-fetch")({
           const name = (x: URL) => x.host + (x.pathname === "/" ? "/index.html" : x.pathname);
           files.push({ path: name(base), content: page.text, size: page.size });
           const refs = new Set<string>();
-          for (const m of page.text.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)) refs.add(m[1]);
-          for (const m of page.text.matchAll(/<link[^>]+href=["']([^"']+\.css[^"']*)["']/gi)) refs.add(m[1]);
-          for (const m of page.text.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet/gi)) refs.add(m[1]);
+           for (const m of page.text.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)) if (m[1]) refs.add(m[1]);
+           for (const m of page.text.matchAll(/<link[^>]+href=["']([^"']+\.css[^"']*)["']/gi)) if (m[1]) refs.add(m[1]);
+           for (const m of page.text.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*rel=["']stylesheet/gi)) if (m[1]) refs.add(m[1]);
           const list = [...refs].map((r) => { try { return new URL(r, base); } catch { return null; } }).filter((x): x is URL => !!x && !!okUrl(x.toString())).slice(0, 30);
           const got = await Promise.allSettled(list.map((x) => grab(x, 1_500_000)));
-          got.forEach((g, i) => { if (g.status === "fulfilled" && g.value.status < 400) files.push({ path: name(list[i]), content: g.value.text, size: g.value.size }); });
+           got.forEach((g, i) => { const target = list[i]; if (target && g.status === "fulfilled" && g.value.status < 400) files.push({ path: name(target), content: g.value.text, size: g.value.size }); });
           return Response.json({ url: page.url, status: page.status, files });
         } catch (e) {
           console.error("rea-fetch", e);
