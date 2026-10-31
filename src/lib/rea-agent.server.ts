@@ -27,7 +27,7 @@ const tools = {
     inputSchema: z.object({
       filter: z.string().optional().describe("substring or regex matched against the path"),
       limit: z.number().optional().describe("max files, default 80"),
-    },
+    }),
   },
   read_file: {
     description: "Read a text file, optionally a line range (1-based, inclusive). Output is capped around 200 lines, so ask for ranges on big files.",
@@ -35,7 +35,7 @@ const tools = {
       path: z.string(),
       start_line: z.number().optional(),
       end_line: z.number().optional(),
-    },
+    }),
   },
   search_code: {
     description: "Search all text files for a regex (or plain text) and return matching lines with path:line. Use this to locate behaviour before reading.",
@@ -43,7 +43,7 @@ const tools = {
       pattern: z.string(),
       path_filter: z.string().optional().describe("only search paths containing this substring"),
       max_results: z.number().optional().describe("default 40"),
-    },
+    }),
   },
   trace_symbol: {
     description: "Find where a function, class, variable or key is defined and everywhere it is referenced, grouped by file with line numbers.",
@@ -69,7 +69,7 @@ const tools = {
       path: z.string(),
       quote: z.string().describe("short verbatim snippet from the file proving the claim"),
       confidence: z.enum(["observed", "inferred"]),
-    },
+    }),
   },
 } satisfies ToolSet;
 
