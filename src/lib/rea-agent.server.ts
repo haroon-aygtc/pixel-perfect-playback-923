@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, stepCountIs, tool, type ModelMessage } from "ai";
+import { streamText, stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { z } from "zod";
 
 const RUN_ID_HEADER = "X-Lovable-AIG-Run-ID";
@@ -71,12 +71,12 @@ const tools = {
       confidence: z.enum(["observed", "inferred"]),
     }),
   }),
-};
+} satisfies ToolSet;
 
 type Step = {
   messages: unknown[];
-  summary?: string;
-  runId?: string;
+  summary?: string | undefined;
+  runId?: string | undefined;
 };
 
 export async function reaAgentStep(input: Step) {
