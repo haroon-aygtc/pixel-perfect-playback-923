@@ -241,7 +241,7 @@ function build(){
  <div class="su-scan"><canvas id="radar" width="260" height="260" aria-label="Deep scan radar: blips appear as items are discovered"></canvas><div class="sc-rows" id="scRows"></div></div>
  <div class="su-tabs" role="tablist" id="suTabs"></div><div class="su-pane" id="suPane"></div>`;
  const anchor=q('.two')||q('#dg');anchor.insertAdjacentElement('afterend',box);
- const TABS=[['agent','REA Agent'],['overview','Overview'],['structure','Structure'],['arch','Architecture'],['flow','Data flow'],['user','User flow'],['prd','PRD'],['proto','Prototype'],['memory','Memory map'],['threats','Threats'],['export','Export']];
+ const TABS=[['agent','REA Agent'],['practice','Practice lab'],['overview','Overview'],['structure','Structure'],['arch','Architecture'],['flow','Data flow'],['user','User flow'],['prd','PRD'],['proto','Prototype'],['memory','Memory map'],['threats','Threats'],['export','Export']];
  q('#suTabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" data-t="${k}" aria-selected="${k===tab}">${l}</button>`).join('');
  q('#suTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;qa('#suTabs button').forEach(x=>x.setAttribute('aria-selected',x===b));renderPane()};
  const go=document.createElement('button');go.id='suiteGo';go.className='hide';go.textContent='Suite ↓';go.onclick=()=>box.scrollIntoView({behavior:'smooth'});(q('#again')||q('header')).insertAdjacentElement('beforebegin',go);
@@ -270,7 +270,7 @@ function radarLoop(){const c=q('#radar');if(!c)return;const x=c.getContext('2d')
 
 function emptyPane(){const p=q('#suPane');if(p)p.innerHTML='<div class="empty">The suite fills in as soon as you choose a target and the Deep Scanner has read it.<br>Try “Scan this page’s own code (sample)” for an instant demo.</div>'}
 function renderAll(){renderPane()}
-function renderPane(){const p=q('#suPane');if(!p)return;if(tab==='agent'){p.innerHTML=vAgent();wireAgent();return}if(!D||!derived){if(scanning)p.innerHTML='<div class="empty">Deep Scanner is still reading files. This tab will fill in when it finishes.</div>';else emptyPane();return}
+function renderPane(){const p=q('#suPane');if(!p)return;if(tab==='practice'){p.innerHTML=vPractice();wirePractice();return}if(tab==='agent'){p.innerHTML=vAgent();wireAgent();return}if(!D||!derived){if(scanning)p.innerHTML='<div class="empty">Deep Scanner is still reading files. This tab will fill in when it finishes.</div>';else emptyPane();return}
  try{p.innerHTML=({overview:vOverview,structure:vStructure,arch:vArch,flow:vFlow,user:vUser,prd:vPrd,proto:vProto,memory:vMemory,threats:vThreats,export:vExport}[tab]||vOverview)()}catch(e){console.error(e);p.innerHTML='<div class="empty">This view hit an error: '+X(e.message)+'</div>'}
  if(tab==='memory')wireMem()}
 
@@ -473,7 +473,7 @@ function resolvePath(p){if(S.vf[p])return p;const c=Object.keys(S.vf);return c.f
 async function bytesOf(path,max=1048576){const f=S.vf[resolvePath(path)];if(!f)throw new Error('no such file: '+path);return new Uint8Array(await f.read(max))}
 const hexRow=(u,o)=>{const sl=[...u.slice(o,o+16)];return o.toString(16).padStart(8,'0')+'  '+sl.map(b=>b.toString(16).padStart(2,'0')).join(' ').padEnd(47)+'  '+sl.map(b=>b>31&&b<127?String.fromCharCode(b):'.').join('')};
 const MAGIC=[['4d5a','PE / Windows executable or DLL'],['7f454c46','ELF executable'],['cafebabe','Java class or Mach-O fat binary'],['feedface','Mach-O 32-bit'],['feedfacf','Mach-O 64-bit'],['cffaedfe','Mach-O 64-bit'],['504b0304','ZIP container (zip, apk, jar, docx, xpi)'],['25504446','PDF'],['89504e47','PNG image'],['ffd8ff','JPEG image'],['47494638','GIF image'],['1f8b','gzip'],['6465780a','Android DEX'],['00617364','Android resources'],['0061736d','WebAssembly module'],['53514c69','SQLite database'],['7b','JSON-like text'],['3c','markup text']];
-async function runTool(name,a){a=a||{};
+async function runTool(name,a,owner=AG){a=a||{};
  if(name==='overview'){const d=derived;return d?{target:S.name,type:d.type,files:D.files,lines:D.loc,languages:Object.entries(D.langs).sort((x,y)=>y[1]-x[1]).slice(0,6),tech:d.tech.map(t=>t.n),entry_points:D.entry.slice(0,8).map(e=>e.path),screens:d.screens.slice(0,10).map(s=>s.route),endpoints_consumed:d.endpoints.length,routes_exposed:D.srv.length,models:D.models.slice(0,8).map(m=>m.name),memory_points:D.mem.length,env_vars:D.env.length,secrets:D.secrets.length,risks:D.risks.length,hosts:d.hosts.slice(0,8).map(h=>h[0])}:{target:S.name,files:S.files.length,note:'deep scan not finished; findings so far: '+S.findings.length}}
  if(name==='list_files'){let re=null;if(a.filter){try{re=new RegExp(a.filter,'i')}catch(e){re=new RegExp(String(a.filter).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i')}}const out=S.files.filter(f=>!re||re.test(clean(f.path))).slice(0,Math.min(a.limit||80,200)).map(f=>({path:clean(f.path),bytes:f.size,role:layerOf(clean(f.path)),sha:f.hash}));return{total_matching:S.files.filter(f=>!re||re.test(clean(f.path))).length,files:out}}
  if(name==='read_file'){const p=resolvePath(a.path),t=await textOf(p);if(!t)return{error:'binary or empty file; use inspect_binary or hex_view',path:p};const ls=t.split('\n');const s=Math.max(1,a.start_line||1),e=Math.min(ls.length,a.end_line||s+199,s+249);return{path:clean(p),total_lines:ls.length,range:[s,e],text:ls.slice(s-1,e).map((l,i)=>(s+i)+'| '+(l.length>400?l.slice(0,400)+'…':l)).join('\n')}}
@@ -492,14 +492,14 @@ async function runTool(name,a){a=a||{};
   let strs=[],cur='';for(const b of u){if(b>31&&b<127)cur+=String.fromCharCode(b);else{if(cur.length>=6)strs.push(cur);cur=''}if(strs.length>=60)break}const rec=S.files.find(f=>f.path===p);
   return{path:clean(p),size_total:rec?rec.size:u.length,sample_bytes:u.length,sha256_prefix:rec&&rec.hash,type:mg?mg[1]:'unknown',entropy_bits_per_byte:+H.toFixed(2),entropy_hint:H>7.5?'very high: compressed, encrypted or packed':H>6?'high: compiled code or compressed data':'low-moderate: text or structured data',strings:strs.slice(0,60).map(x=>x.slice(0,120)),header_hex:hexRow(u,0)+'\n'+hexRow(u,16)+'\n'+hexRow(u,32)+'\n'+hexRow(u,48),note:'Byte-level view only. No disassembler or decompiler is available in this browser.'}}
  if(name==='record_finding'){const p=resolvePath(a.path),t=await textOf(p).catch(()=>'' ),norm=x=>String(x).replace(/\s+/g,' ').trim(),q2=norm(a.quote||'');let line=0,ok=false;if(t&&q2){const flat=t.split('\n');for(let i=0;i<flat.length;i++)if(norm(flat[i]).includes(q2)){ok=true;line=i+1;break}if(!ok&&norm(t).includes(q2)){ok=true;const idx=t.replace(/\s+/g,' ').indexOf(q2);line=0;}}
-  const rec={claim:String(a.claim||'').slice(0,300),path:clean(p),line,quote:q2.slice(0,200),conf:a.confidence==='inferred'?'inferred':'observed',verified:ok};AG.ledger.push(rec);return{recorded:true,verified:ok,line:line||undefined,note:ok?'Quote found in file.':'Quote NOT found verbatim in that file. Re-read the file and quote exactly, or downgrade the claim.'}}
+  const rec={claim:String(a.claim||'').slice(0,300),path:clean(p),line,quote:q2.slice(0,200),conf:a.confidence==='inferred'?'inferred':'observed',verified:ok};owner.ledger.push(rec);return{recorded:true,verified:ok,line:line||undefined,note:ok?'Quote found in file.':'Quote NOT found verbatim in that file. Re-read the file and quote exactly, or downgrade the claim.'}}
  return{error:'unknown tool '+name}}
 const clip=o=>{let s=JSON.stringify(o);if(s.length>14000)return{truncated:true,preview:s.slice(0,14000)};return o};
 
 function agentSummary(){if(!S||!S.name)return'none loaded';const d=derived;return JSON.stringify({target:S.name,files:S.files.length,findings:S.findings.length,...(d?{type:d.type,tech:d.tech.slice(0,12).map(t=>t.n),lines:D.loc,screens:d.screens.length,models:D.models.length}:{deep_scan:'running or not started'}),sample_paths:S.files.slice(0,25).map(f=>clean(f.path))})}
 function agentReset(){AG.msgs=[];AG.ui=[];AG.busy=false;AG.runId=null;AG.ledger=[];AG.steps=0;textCache.clear();AG.tgt=S}
 async function agentAsk(text){
- if(AG.busy||!text.trim())return;if(!S||!S.name||!S.files.length){AG.ui.push({k:'err',t:'Choose a target first. The agent can only inspect what is loaded.'});return agentRefresh()}
+ if(AG.busy||PR.busy||!text.trim())return;if(!S||!S.name||!S.files.length){AG.ui.push({k:'err',t:'Choose a target first. The agent can only inspect what is loaded.'});return agentRefresh()}
  AG.busy=true;AG.ui.push({k:'user',t:text});AG.msgs.push({role:'user',content:text});agentRefresh();let steps=0;
  try{
   while(steps++<14){
@@ -551,6 +551,7 @@ function addUrlLaunch(){const row=q('#launch .row');if(!row||q('#urlGo'))return;
 /* ---------- lifecycle watcher ---------- */
 function tick(){try{
  if(typeof S==='undefined')return;
+ if(PR.busy&&PR.session&&PR.session.target!==S)stopPractice();
  if(S!==lastS){lastS=S;baseDone=false;if(AG.tgt!==S)agentReset();if(tab==='agent'&&q('#suite'))renderPane();if(!scanning){D=null;derived=null;radarPts=[];if(q('#suite')){liveRows();progress(0);const d=q('#suDot');if(d)d.className='idle';q('#suState').textContent='waiting for a target';const g=q('#suiteGo');if(g)g.classList.add('hide');emptyPane()}}}
  if(!scanning&&!D&&S.name&&S.total>0&&S.files.length>=S.total&&q('#suite'))deepScan();
  if(!running&&D&&!scanning&&S.name&&!baseDone&&/^complete/.test(q('#runid').textContent)){baseDone=true;derive();renderAll();celebrate()}
