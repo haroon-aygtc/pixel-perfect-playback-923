@@ -552,6 +552,7 @@ function addUrlLaunch(){const row=q('#launch .row');if(!row||q('#urlGo'))return;
 function tick(){try{
  if(typeof S==='undefined')return;
  if(PR.busy&&PR.session&&PR.session.target!==S)stopPractice();
+ if(tab==='practice'){const ready=S&&S.name&&S.files.length&&!running&&!scanning;const save=q('#prForm button[type="submit"]'),start=q('#prRun');if(save)save.disabled=!ready||PR.busy;if(start)start.disabled=!ready||!selectedPractice()||PR.busy||AG.busy;}
  if(S!==lastS){lastS=S;baseDone=false;if(AG.tgt!==S)agentReset();if(tab==='agent'&&q('#suite'))renderPane();if(!scanning){D=null;derived=null;radarPts=[];if(q('#suite')){liveRows();progress(0);const d=q('#suDot');if(d)d.className='idle';q('#suState').textContent='waiting for a target';const g=q('#suiteGo');if(g)g.classList.add('hide');emptyPane()}}}
  if(!scanning&&!D&&S.name&&S.total>0&&S.files.length>=S.total&&q('#suite'))deepScan();
  if(!running&&D&&!scanning&&S.name&&!baseDone&&/^complete/.test(q('#runid').textContent)){baseDone=true;derive();renderAll();celebrate()}
