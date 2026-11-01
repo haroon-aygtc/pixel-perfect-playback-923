@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { StudioAccess } from "@/components/studio-access";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -16,10 +17,13 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   return (
+    <>
+    <StudioAccess />
     <iframe
       src="/studio.html"
       title="REA Reverse Engineering Studio"
       className="fixed inset-0 h-full w-full border-0 bg-background"
     />
+    </>
   );
 }
