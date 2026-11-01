@@ -1,0 +1,20 @@
+name: Studio checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+      - name: Reject committed private credentials
+        run: |
+          if git grep -nE '(LOVABLE_API_KEY|SUPABASE_SERVICE_ROLE_KEY)[[:space:]]*=[[:space:]]*["\x27]?[A-Za-z0-9_-]{20,}' -- ':!bun.lock'; then
+            echo 'Private credential detected'; exit 1
+          fi
