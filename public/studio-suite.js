@@ -1,10 +1,10 @@
 /* REA Intelligence Suite
  * Deep scanner + Structure, Architecture, Data flow, User flow, PRD, Prototype, Memory map, Threats, Export.
- * Reads the studio globals (S, running, SKIP, toText) and never uploads anything. */
+ * Reads local studio globals; AI requests share explicitly consented excerpts. */
 (()=>{
 'use strict';
 const q=(s,r=document)=>r.querySelector(s),qa=(s,r=document)=>[...r.querySelectorAll(s)];
-const X=s=>esc(s==null?'':s),short=(s,n=40)=>{s=String(s);return s.length>n?s.slice(0,n-1)+'…':s};
+const X=s=>escapeHtml(s==null?'':s),short=(s,n=40)=>{s=String(s);return s.length>n?s.slice(0,n-1)+'…':s};
 const mask=v=>v.length<=8?'••••':v.slice(0,4)+'••••'+v.slice(-2);
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const nf=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':String(n);
@@ -253,7 +253,7 @@ function liveRows(){const el=q('#scRows');if(!el)return;const c=k=>!D?0:k==='tec
  el.innerHTML=SCN.map(([n,k,col])=>`<div class="sc-row" style="--k:${col}"><span>${n}</span><b>${c(k)}</b></div>`).join('');
  const m=q('#suMeta');if(m&&D)m.textContent=D.files+' files · '+nf(D.loc)+' lines'}
 function progress(f){const b=q('#suProg');if(b)b.style.width=Math.round(f*100)+'%'}
-function setBusy(b){const d=q('#suDot'),s=q('#suState'),u=q('#suSub');if(!d)return;d.className=b?'busy':'';s.textContent=b?'Deep Scanner reading files…':'Deep scan complete';if(b)u.textContent='Reading every text file in your browser for models, screens, memory, secrets and data flow. Nothing leaves this page.'}
+function setBusy(b){const d=q('#suDot'),s=q('#suState'),u=q('#suSub');if(!d)return;d.className=b?'busy':'';s.textContent=b?'Deep Scanner reading files…':'Deep scan complete';if(b)u.textContent='Reading every text file in your browser for models, screens, memory, secrets and data flow. Local scanning stays on this device. AI requires separate sharing consent.'}
 function celebrate(){const g=q('#suiteGo');if(g)g.classList.remove('hide');const u=q('#suSub');if(u&&derived)u.innerHTML=`<b>${X(derived.type)}</b> · ${derived.screens.length} screens · ${derived.endpoints.length+D.srv.length} endpoints · ${D.models.length} models · ${D.mem.length} memory points · ${D.risks.length+D.secrets.length} threat signals`;
  const b=q('#suite');b.classList.remove('flash');void b.offsetWidth;b.classList.add('flash')}
 
@@ -466,20 +466,30 @@ async function paneClick(e){
 /* ================= REA AGENT: model on the server, tools run here on your files ================= */
 const AG={msgs:[],ui:[],busy:false,runId:null,ledger:[],draft:'',tgt:null,steps:0};
 const TOOLNAMES={overview:'Overview',list_files:'List files',read_file:'Read file',search_code:'Search code',trace_symbol:'Trace symbol',get_findings:'Get findings',inspect_binary:'Inspect bytes',hex_view:'Hex view',record_finding:'Record evidence'};
-const textCache=new Map();
+// SAFETY_CORE_START
+function escapeHtml(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function createTextCache(maxBytes=8388608,maxEntries=32){
+ const entries=new Map();let bytes=0;
+ return {get(key){const value=entries.get(key);if(value===undefined)return;entries.delete(key);entries.set(key,value);return value},set(key,value){if(entries.has(key)){bytes-=entries.get(key).length*2;entries.delete(key)}const size=value.length*2;if(size>maxBytes)return;while(entries.size&&(bytes+size>maxBytes||entries.size>=maxEntries)){const oldest=entries.keys().next().value;bytes-=entries.get(oldest).length*2;entries.delete(oldest)}entries.set(key,value);bytes+=size},clear(){entries.clear();bytes=0},get size(){return entries.size},get bytes(){return bytes}};
+}
+function verifyQuote(text,quote){const at=String(text).indexOf(String(quote));return quote&&at>=0?{verified:true,line:String(text).slice(0,at).split('\n').length}:{verified:false,line:0}}
+// SAFETY_CORE_END
+const textCache=createTextCache();
+const bridge=()=>{const b=window.parent.reaBridge;if(!b)throw new Error('Open the studio from its home page to use AI or website inspection.');return b};
+async function agentRequest(body,signal){return bridge().request(body,signal)}
 const isText=p=>!SKIP.test(p);
-async function textOf(path){if(textCache.has(path))return textCache.get(path);const f=S.vf[path];if(!f)throw new Error('no such file: '+path);let t='';try{t=toText(await f.read(1572864))}catch(e){}t=typeof t==='string'?t:'';textCache.set(path,t);return t}
+async function textOf(path){const cached=textCache.get(path);if(cached!==undefined)return cached;const f=S.vf[path];if(!f)throw new Error('no such file: '+path);let t='';try{t=toText(await f.read(1572864))}catch(e){}t=typeof t==='string'?t:'';textCache.set(path,t);return t}
 function resolvePath(p){if(S.vf[p])return p;const c=Object.keys(S.vf);return c.find(x=>clean(x)===p)||c.find(x=>clean(x).endsWith('/'+p))||c.find(x=>clean(x).toLowerCase().endsWith(String(p).toLowerCase()))||p}
 async function bytesOf(path,max=1048576){const f=S.vf[resolvePath(path)];if(!f)throw new Error('no such file: '+path);return new Uint8Array(await f.read(max))}
 const hexRow=(u,o)=>{const sl=[...u.slice(o,o+16)];return o.toString(16).padStart(8,'0')+'  '+sl.map(b=>b.toString(16).padStart(2,'0')).join(' ').padEnd(47)+'  '+sl.map(b=>b>31&&b<127?String.fromCharCode(b):'.').join('')};
 const MAGIC=[['4d5a','PE / Windows executable or DLL'],['7f454c46','ELF executable'],['cafebabe','Java class or Mach-O fat binary'],['feedface','Mach-O 32-bit'],['feedfacf','Mach-O 64-bit'],['cffaedfe','Mach-O 64-bit'],['504b0304','ZIP container (zip, apk, jar, docx, xpi)'],['25504446','PDF'],['89504e47','PNG image'],['ffd8ff','JPEG image'],['47494638','GIF image'],['1f8b','gzip'],['6465780a','Android DEX'],['00617364','Android resources'],['0061736d','WebAssembly module'],['53514c69','SQLite database'],['7b','JSON-like text'],['3c','markup text']];
-async function runTool(name,a,owner=AG){a=a||{};
+async function runTool(name,a,owner=AG){a=bridge().validateTool(name,a||{});
  if(name==='overview'){const d=derived;return d?{target:S.name,type:d.type,files:D.files,lines:D.loc,languages:Object.entries(D.langs).sort((x,y)=>y[1]-x[1]).slice(0,6),tech:d.tech.map(t=>t.n),entry_points:D.entry.slice(0,8).map(e=>e.path),screens:d.screens.slice(0,10).map(s=>s.route),endpoints_consumed:d.endpoints.length,routes_exposed:D.srv.length,models:D.models.slice(0,8).map(m=>m.name),memory_points:D.mem.length,env_vars:D.env.length,secrets:D.secrets.length,risks:D.risks.length,hosts:d.hosts.slice(0,8).map(h=>h[0])}:{target:S.name,files:S.files.length,note:'deep scan not finished; findings so far: '+S.findings.length}}
- if(name==='list_files'){let re=null;if(a.filter){try{re=new RegExp(a.filter,'i')}catch(e){re=new RegExp(String(a.filter).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i')}}const out=S.files.filter(f=>!re||re.test(clean(f.path))).slice(0,Math.min(a.limit||80,200)).map(f=>({path:clean(f.path),bytes:f.size,role:layerOf(clean(f.path)),sha:f.hash}));return{total_matching:S.files.filter(f=>!re||re.test(clean(f.path))).length,files:out}}
- if(name==='read_file'){const p=resolvePath(a.path),t=await textOf(p);if(!t)return{error:'binary or empty file; use inspect_binary or hex_view',path:p};const ls=t.split('\n');const s=Math.max(1,a.start_line||1),e=Math.min(ls.length,a.end_line||s+199,s+249);return{path:clean(p),total_lines:ls.length,range:[s,e],text:ls.slice(s-1,e).map((l,i)=>(s+i)+'| '+(l.length>400?l.slice(0,400)+'…':l)).join('\n')}}
- if(name==='search_code'||name==='trace_symbol'){const sym=name==='trace_symbol';let re;const pat=sym?'\\b'+String(a.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b':a.pattern;try{re=new RegExp(pat,'i')}catch(e){re=new RegExp(String(pat).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i')}
+ if(name==='list_files'){const filter=String(a.filter||'').toLowerCase(),matches=S.files.filter(f=>clean(f.path).toLowerCase().includes(filter));return{total_matching:matches.length,files:matches.slice(0,a.limit||80).map(f=>({path:clean(f.path),bytes:f.size,role:layerOf(clean(f.path)),sha:f.hash}))}}
+ if(name==='read_file'){const p=resolvePath(a.path),t=await textOf(p);if(!t)return{error:'binary or empty file; use inspect_binary or hex_view',path:p};const ls=t.split('\n');const s=Math.max(1,a.start_line||1),e=Math.min(ls.length,Math.max(s,a.end_line||s+199),s+249);return{path:clean(p),total_lines:ls.length,range:[s,e],text:ls.slice(s-1,e).map((l,i)=>(s+i)+'| '+(l.length>400?l.slice(0,400)+'…':l)).join('\n')}}
+ if(name==='search_code'||name==='trace_symbol'){const sym=name==='trace_symbol';let re;const pat=String(sym?a.name:a.pattern).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');re=new RegExp(sym?'\\b'+pat+'\\b':pat,'i');
   const lim=Math.min(a.max_results||(sym?60:40),100),hits=[];let scanned=0;const defRe=sym?new RegExp('(?:function|class|const|let|var|def|interface|type|enum|fun|func|struct)\\s+'+String(a.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b|\\b'+String(a.name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[:=]\\s*(?:async\\s*)?(?:function|\\()'):null;
-  for(const f of S.files){if(hits.length>=lim)break;const p=f.path;if(!isText(p)||(a.path_filter&&!clean(p).includes(a.path_filter)))continue;if(++scanned>700)break;let t='';try{t=await textOf(p)}catch(e){}if(!t)continue;const ls=t.split('\n');for(let i=0;i<ls.length&&hits.length<lim;i++)if(re.test(ls[i]))hits.push({at:clean(p)+':'+(i+1),line:ls[i].trim().slice(0,220),...(sym?{kind:defRe.test(ls[i])?'definition':'reference'}:{})})}
+  for(const f of S.files){if(hits.length>=lim)break;const p=f.path;if(!isText(p)||(a.path_filter&&!clean(p).includes(a.path_filter)))continue;if(++scanned>700)break;if(scanned%10===0)await new Promise(r=>setTimeout(r,0));let t='';try{t=await textOf(p)}catch(e){}if(!t)continue;const ls=t.split('\n');for(let i=0;i<ls.length&&hits.length<lim;i++){if(i&&i%2000===0)await new Promise(r=>setTimeout(r,0));if(re.test(ls[i]))hits.push({at:clean(p)+':'+(i+1),line:ls[i].trim().slice(0,220),...(sym?{kind:defRe.test(ls[i])?'definition':'reference'}:{})})}}
   return{files_searched:scanned,matches:hits.length,results:hits}}
  if(name==='get_findings'){const k=String(a.kind||'').toLowerCase(),lim=Math.min(a.limit||50,150);const F=S.findings||[];const bs=x=>F.filter(f=>f.kind===x).slice(0,lim).map(f=>({value:f.value,at:clean(f.file)+':'+f.line,method:f.method||undefined,ver:f.ver||undefined}));
   const m={endpoint:()=>bs('endpoint'),url:()=>bs('url'),storage:()=>bs('storage'),route:()=>bs('route'),ui:()=>bs('ui'),dep:()=>bs('dep'),import:()=>bs('import')};
@@ -491,8 +501,7 @@ async function runTool(name,a,owner=AG){a=a||{};
   const cnt=new Array(256).fill(0);u.forEach(b=>cnt[b]++);let H=0;cnt.forEach(c=>{if(c){const q2=c/u.length;H-=q2*Math.log2(q2)}});const hx=[...u.slice(0,4)].map(b=>b.toString(16).padStart(2,'0')).join('');const mg=MAGIC.find(m=>hx.startsWith(m[0]));
   let strs=[],cur='';for(const b of u){if(b>31&&b<127)cur+=String.fromCharCode(b);else{if(cur.length>=6)strs.push(cur);cur=''}if(strs.length>=60)break}const rec=S.files.find(f=>f.path===p);
   return{path:clean(p),size_total:rec?rec.size:u.length,sample_bytes:u.length,sha256_prefix:rec&&rec.hash,type:mg?mg[1]:'unknown',entropy_bits_per_byte:+H.toFixed(2),entropy_hint:H>7.5?'very high: compressed, encrypted or packed':H>6?'high: compiled code or compressed data':'low-moderate: text or structured data',strings:strs.slice(0,60).map(x=>x.slice(0,120)),header_hex:hexRow(u,0)+'\n'+hexRow(u,16)+'\n'+hexRow(u,32)+'\n'+hexRow(u,48),note:'Byte-level view only. No disassembler or decompiler is available in this browser.'}}
- if(name==='record_finding'){const p=resolvePath(a.path),t=await textOf(p).catch(()=>'' ),norm=x=>String(x).replace(/\s+/g,' ').trim(),q2=norm(a.quote||'');let line=0,ok=false;if(t&&q2){const flat=t.split('\n');for(let i=0;i<flat.length;i++)if(norm(flat[i]).includes(q2)){ok=true;line=i+1;break}if(!ok&&norm(t).includes(q2)){ok=true;const idx=t.replace(/\s+/g,' ').indexOf(q2);line=0;}}
-  const rec={claim:String(a.claim||'').slice(0,300),path:clean(p),line,quote:q2.slice(0,200),conf:a.confidence==='inferred'?'inferred':'observed',verified:ok};owner.ledger.push(rec);return{recorded:true,verified:ok,line:line||undefined,note:ok?'Quote found in file.':'Quote NOT found verbatim in that file. Re-read the file and quote exactly, or downgrade the claim.'}}
+ if(name==='record_finding'){const p=resolvePath(a.path),t=await textOf(p).catch(()=>''),check=verifyQuote(t,a.quote);const rec={claim:a.claim,path:clean(p),line:check.line,quote:a.quote,conf:a.confidence,verified:check.verified};owner.ledger.push(rec);return{recorded:true,...check,note:check.verified?'Exact quote found in file.':'Exact quote not found. Re-read and quote verbatim.'}}
  return{error:'unknown tool '+name}}
 const clip=o=>{let s=JSON.stringify(o);if(s.length>14000)return{truncated:true,preview:s.slice(0,14000)};return o};
 
@@ -504,7 +513,7 @@ async function agentAsk(text){
  try{
   while(steps++<14){
    AG.ui.push({k:'wait'});agentRefresh();
-   let j;try{const r=await fetch('/api/rea-agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:AG.msgs,summary:agentSummary(),runId:AG.runId})});j=await r.json()}catch(e){j={error:'Could not reach the agent service. Check your connection.'}}
+   let j;try{j=await agentRequest({messages:AG.msgs,summary:agentSummary(),...(AG.runId?{runId:AG.runId}:{})})}catch(e){j={error:String(e.message||e)}}
    AG.ui=AG.ui.filter(x=>x.k!=='wait');
    if(j.error){AG.ui.push({k:'err',t:j.error});break}
    AG.runId=j.runId||AG.runId;AG.msgs.push(...j.messages);
@@ -544,7 +553,7 @@ function wireAgent(){const f=q('#agForm'),t=q('#agText');if(!f)return;const go=(
 /* website target: server fetches the public page and its scripts/styles, then the normal scan runs on them */
 let pendingName=null;
 function addUrlLaunch(){const row=q('#launch .row');if(!row||q('#urlGo'))return;const w=document.createElement('div');w.style.cssText='display:grid;gap:8px;grid-template-columns:1fr auto';w.innerHTML='<input id="urlIn" class="pick" disabled placeholder="https://example.com" inputmode="url" style="font:12px var(--m);background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:9px 11px;min-width:0"><button class="pick" id="urlGo" disabled>Inspect site</button>';row.appendChild(w);
- const go=async()=>{const u=q('#urlIn').value.trim();if(!u)return;const b=q('#urlGo');b.textContent='Fetching…';b.disabled=true;try{const r=await fetch('/api/rea-fetch',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:/^https?:/i.test(u)?u:'https://'+u})});const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||'failed');const fl=j.files.map(f=>new File([f.content],f.path,{type:'text/plain'}));pendingName=new URL(j.url).host;begin(fl)}catch(e){b.textContent=String(e.message||'Failed').slice(0,40)}finally{setTimeout(()=>{b.textContent='Inspect site';b.disabled=!q('#ok').checked},2000)}};
+ const go=async()=>{const u=q('#urlIn').value.trim();if(!u||!q('#ok').checked)return;const b=q('#urlGo');b.textContent='Fetching…';b.disabled=true;try{const j=await bridge().inspectWebsite(/^https?:/i.test(u)?u:'https://'+u);const fl=j.files.map(f=>new File([f.content],f.path,{type:'text/plain'}));pendingName=new URL(j.url).host;begin(fl)}catch(e){b.textContent='Cannot inspect site';alert('This site could not be downloaded directly. It may block browser access or redirect. Save its HTML/scripts and upload them instead. '+String(e.message||''))}finally{setTimeout(()=>{b.textContent='Inspect site';b.disabled=!q('#ok').checked},2000)}};
  q('#urlGo').onclick=go;q('#urlIn').onkeydown=e=>{if(e.key==='Enter')go()};
  const _run=run;run=(vf,name)=>{const n=pendingName||name;pendingName=null;return _run(vf,n)}}
 
@@ -625,8 +634,8 @@ async function startPractice(){
  try{
   for(let n=0;n<task.budget;n++){
    check();session.rounds=n+1;session.status='Investigating';practiceRefresh();
-   const res=await fetch('/api/rea-agent',{method:'POST',signal:controller.signal,headers:{'content-type':'application/json'},body:JSON.stringify({messages,summary:agentSummary(),runId})});const j=await res.json();check();
-   if(!res.ok||j.error)throw new Error(j.error||'Agent request failed.');
+   const j=await agentRequest({messages,summary:agentSummary(),...(runId?{runId}:{})},controller.signal);check();
+   if(j.error)throw new Error(j.error||'Agent request failed.');
    if(!Array.isArray(j.messages)||!Array.isArray(j.toolCalls))throw new Error('The agent returned an invalid response.');
    runId=j.runId||runId;messages.push(...j.messages);if(j.text)session.answer+=(session.answer?'\n\n':'')+j.text;
    if(!j.toolCalls.length){session.status='Completed';break}
@@ -645,6 +654,6 @@ async function startPractice(){
   PR.runs.push(run);PR.runs=PR.runs.slice(-40);savePractice();practiceRefresh();
  }
 }
-function init(){loadPractice();build();addUrlLaunch();setInterval(tick,350)}
+function init(){esc=escapeHtml;const disclosure=q('#launch p');if(disclosure)disclosure.textContent='Files are analysed locally. AI investigations send your question, scan summary and requested excerpts to the AI provider, with your consent. Website inspection downloads readable public pages directly in your browser.';const originalBegin=begin;begin=(list)=>{if(!q('#ok').checked)return;return originalBegin(list)};const originalRun=run;run=(vf,name)=>{if(!q('#ok').checked)return;return originalRun(vf,name)};loadPractice();build();addUrlLaunch();setInterval(tick,350)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
