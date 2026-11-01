@@ -1,3 +1,7 @@
 - [x] Add local practice challenges tied to the loaded code target.
 - [x] Run isolated REA sessions with cancellation, evidence grading, and saved history.
 - [x] Verify practice on uploaded code and run regression tests.
+- [ ] Authenticate server endpoints and close unsafe website fetching.
+- [ ] Validate tool requests, add consent and resource bounds, and regression tests.
+- [ ] Add portable formatting, CI, environment guidance, and remove unused scaffolding.
+- [ ] Verify signed-in agent and practice flows; document remaining audit limitations.
